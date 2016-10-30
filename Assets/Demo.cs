@@ -17,11 +17,16 @@ public class Demo : MonoBehaviour {
 	 int                     fluidCellsX = 55;
 	 bool                    resizeFluid;
 	 bool                    drawParticles = true;
+	bool                    drawFluid = true;
 
 	Color currColor = Color.white;
 	float hue;
 	public ParticleSystem ps;
 	public Camera renderCamera;
+
+	float fpsTime;
+	int fpsFrame;
+	string lastFps;
 
 	void Start () {
 
@@ -91,8 +96,19 @@ public class Demo : MonoBehaviour {
 		
 		UpdatePartical();
 		fluidSolver.update();
-		fluidDrawer.draw();
-			
+
+		if(drawFluid)
+		{
+			fluidDrawer.draw();
+
+			Color[] cols = texture.GetPixels();
+			for( int i = 0; i < cols.Length; ++i ) {
+				cols[i] = fluidDrawer._pixels[i];
+			}
+
+			texture.SetPixels(cols);
+			texture.Apply();
+		}	
 
 		if(Input.GetMouseButton(0))
 			mouseDragged();
@@ -110,13 +126,14 @@ public class Demo : MonoBehaviour {
 		currColor = ColorFromHSV(hue,0.8f,0.8f);
 		ps.startColor = currColor;
 
-		Color[] cols = texture.GetPixels();
-		for( int i = 0; i < cols.Length; ++i ) {
-			cols[i] = fluidDrawer._pixels[i];
+		fpsTime += Time.deltaTime;
+		if(fpsTime >= 1f)
+		{
+			lastFps = ((float)fpsFrame / fpsTime).ToString("##.##");
+			fpsTime = 0f;
+			fpsFrame = 0;
 		}
-
-		texture.SetPixels(cols);
-		texture.Apply();
+		fpsFrame++;
 	}
 
 	public static Color ColorFromHSV(float hue, float saturation, float value)
@@ -160,9 +177,11 @@ public class Demo : MonoBehaviour {
 		addComboBox("fd.drawMode", ref fluidDrawer.drawMode);
 		addToggle("fs.doRGB", ref fluidSolver.doRGB); 
 		addToggle("fs.doVorticityConfinement",ref fluidSolver.doVorticityConfinement); 
+		addToggle("drawFluid",ref drawFluid); 
 		addToggle("drawParticles",ref drawParticles); 
 		addToggle("fs.wrapX",ref fluidSolver.wrap_x);
 		addToggle("fs.wrapY", ref fluidSolver.wrap_y);
+		GUILayout.Label("FPS: " + lastFps);
 		GUILayout.EndVertical();
 	}
 
@@ -228,17 +247,23 @@ public class Demo : MonoBehaviour {
 		vel *= 2f;
 
 		int index = fluidSolver.getIndexForNormalizedPosition(pos.x, pos.y);
-		if(addColor)
+
+		if(drawFluid)
 		{
-			Vector3 col = new Vector3(currColor.r,currColor.g,currColor.b);
-			fluidSolver.addColorAtIndex(index,col * colorMult);
-			if(drawParticles)
+			if(addColor)
 			{
-				worldPos.z = 0;
-				addParticles(worldPos,vel,5);
+				Vector3 col = new Vector3(currColor.r,currColor.g,currColor.b);
+				fluidSolver.addColorAtIndex(index,col * colorMult);		
 			}
 		}
+
 		fluidSolver.addForceAtIndex(index,vel * velocityMult);
+
+		if(drawParticles)
+		{
+			worldPos.z = 0;
+			addParticles(worldPos,vel,5);
+		}
 	}
 
 	void addParticles(Vector3 pos,Vector3 toDirection, int count){
@@ -269,8 +294,7 @@ public class Demo : MonoBehaviour {
 			int index = fluidSolver.getIndexForNormalizedPosition(xCoord,yCoord);
 
 			Vector2 vel = fluidSolver.getVelocityAtIndex(index) * 10000;
-			if(i == 0)
-				Debug.Log(vel);
+
 			if(xCoord < 0f || xCoord > 1f)
 				vel.x *= -1;
 			if(yCoord < 0f || yCoord > 1f)
